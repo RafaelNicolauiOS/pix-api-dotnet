@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+
+    # PostgreSQL e RabbitMQ de verdade, como containers ao lado do job. Com eles, os testes
+    # [PostgresFact] e [RabbitMqFact] rodam em vez de aparecerem como "ignorados".
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: pix
+          POSTGRES_PASSWORD: pix
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pix"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      rabbitmq:
+        image: rabbitmq:4-management
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s --health-timeout 10s --health-retries 10
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      PIX_TESTE_POSTGRES: Host=localhost;Port=5432;Username=pix;Password=pix
+      PIX_TESTE_RABBITMQ: amqp://guest:guest@localhost:5672
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - run: dotnet restore --locked-mode
+
+      - run: dotnet build --no-restore -c Release
+
+      - name: dotnet test
+        run: dotnet test --no-build -c Release --logger "trx;LogFileName=resultado.trx" --logger "console;verbosity=normal"
+
+      - name: Migrations em dia com o modelo
+        # Falha se alguém mudou uma entidade/configuração e esqueceu de gerar a migration.
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes -p src/PixApi.Infrastructure -s src/PixApi.Api
+        env:
+          ConnectionStrings__Pix: Host=localhost;Database=pix
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultado-testes
+          path: "**/TestResults/*.trx"
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: testes
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build da imagem
+        run: docker build -t pix-api-dotnet .
+      - name: A imagem sobe e responde (SQLite, sem dependências externas)
+        run: |
+          docker run -d --name api -p 8080:8080 \
+            -e Pix__Banco__Provedor=sqlite -e ConnectionStrings__Pix="Data Source=/tmp/pix.db" pix-api-dotnet
+          for i in $(seq 1 30); do curl -sf localhost:8080/contas && break; sleep 1; done
+          curl -sf localhost:8080/contas | grep -q ana@pix.com
+          test "$(docker exec api id -u)" != "0"

@@ -7,5 +7,7 @@
     <!-- Avisos de nulidade viram erro: um "String?" esquecido quebra o build, como o Optional do Swift. -->
     <WarningsAsErrors>nullable</WarningsAsErrors>
     <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- packages.lock.json: versões exatas de todas as dependências (o mesmo papel do package-lock.json). -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 </Project>

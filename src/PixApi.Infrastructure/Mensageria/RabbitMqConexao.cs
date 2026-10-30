@@ -17,8 +17,10 @@ public sealed class RabbitMqConexao(IOptions<RabbitMqOpcoes> opcoes) : IDisposab
     {
         var canal = Conexao().CreateModel();
         canal.ExchangeDeclare(Opcoes.Exchange, ExchangeType.Topic, durable: true);
-        canal.QueueDeclare(Opcoes.Fila, durable: !Opcoes.FilaTemporaria, exclusive: false,
-            autoDelete: Opcoes.FilaTemporaria);
+        // Filas sempre duráveis (o RabbitMQ 4 não aceita fila transitória compartilhada). A temporária dos
+        // testes expira sozinha após 1 min sem uso (x-expires).
+        var argumentos = Opcoes.FilaTemporaria ? new Dictionary<string, object> { ["x-expires"] = 60_000 } : null;
+        canal.QueueDeclare(Opcoes.Fila, durable: true, exclusive: false, autoDelete: false, argumentos);
         canal.QueueBind(Opcoes.Fila, Opcoes.Exchange, Opcoes.RoutingKey);
         return canal;
     }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -67,8 +68,9 @@ public class PostgresTests(PostgresFactory api) : IClassFixture<PostgresFactory>
         var status = new System.Collections.Concurrent.ConcurrentBag<HttpStatusCode>();
         await Parallel.ForEachAsync(pedidos, new ParallelOptions { MaxDegreeOfParallelism = 30 }, async (p, _) =>
         {
+            // InvariantCulture: numa máquina em pt-BR, {p.Valor} viraria "12,34" (JSON inválido → 400).
             var resposta = await http.PostJson("/transferencias",
-                $$"""{"chaveOrigem": "{{p.Origem}}", "chaveDestino": "{{p.Destino}}", "valor": {{p.Valor}}}""");
+                $$"""{"chaveOrigem": "{{p.Origem}}", "chaveDestino": "{{p.Destino}}", "valor": {{p.Valor.ToString(CultureInfo.InvariantCulture)}}}""");
             status.Add(resposta.StatusCode);
             if (resposta.StatusCode == HttpStatusCode.OK) confirmadas.Add(p);
         });

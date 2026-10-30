@@ -11,6 +11,6 @@ public sealed class RabbitMqOpcoes
     public string RoutingKey { get; set; } = "transferencia.realizada";
     public string Fila { get; set; } = "pix.notificacoes";
 
-    // Só para testes: a fila some quando o consumidor desconecta.
+    // Só para testes: a fila expira sozinha depois de 1 minuto sem uso.
     public bool FilaTemporaria { get; set; }
 }

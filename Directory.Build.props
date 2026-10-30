@@ -1,0 +1,11 @@
+<Project>
+  <!-- Vale para todos os projetos da solution (como o <properties> de um pom pai). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Avisos de nulidade viram erro: um "String?" esquecido quebra o build, como o Optional do Swift. -->
+    <WarningsAsErrors>nullable</WarningsAsErrors>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+</Project>

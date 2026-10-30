@@ -93,6 +93,18 @@ public class ContasApiTests(PixApiFactory api) : IClassFixture<PixApiFactory>
     }
 
     [Fact]
+    public async Task GetPorId_SaldoSaiComDuasCasas_ComoONumericDoBanco()
+    {
+        // Contrato do Java: NUMERIC(15,2) → "saldo":5.00. Compara o TEXTO do JSON, não o número.
+        var id = (long)(await (await _http.PostJson("/contas",
+            $$"""{"titular": "X", "cpf": "12345678901", "chavePix": "{{HttpExtensions.ChaveUnica()}}", "saldo": 5}""")).Json())["id"]!;
+
+        var json = await _http.GetStringAsync($"/contas/{id}");
+
+        Assert.Contains("\"saldo\":5.00", json);
+    }
+
+    [Fact]
     public async Task GetPorId_Inexistente_DeveRetornar404ProblemDetails()
     {
         var resposta = await _http.GetAsync("/contas/999999");

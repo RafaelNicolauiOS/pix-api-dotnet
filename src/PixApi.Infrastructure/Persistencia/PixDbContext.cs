@@ -21,10 +21,16 @@ public class PixDbContext(DbContextOptions<PixDbContext> options) : DbContext(op
         // No PostgreSQL a coluna é "timestamp with time zone", como no projeto Java.
         if (Database.IsSqlite())
         {
-            foreach (var propriedade in modelBuilder.Model.GetEntityTypes().SelectMany(t => t.GetProperties())
-                         .Where(p => p.ClrType == typeof(DateTimeOffset)))
+            var propriedades = modelBuilder.Model.GetEntityTypes().SelectMany(t => t.GetProperties()).ToList();
+            foreach (var propriedade in propriedades.Where(p => p.ClrType == typeof(DateTimeOffset)))
             {
                 propriedade.SetValueConverter(new DateTimeOffsetToBinaryConverter());
+            }
+            // O SQLite guarda decimal como texto e devolve "1000.0"; o NUMERIC(15,2) do PostgreSQL devolve
+            // "1000.00". Somar 0.00m dá ao decimal a escala 2 (o decimal guarda a escala), e o JSON sai igual.
+            foreach (var propriedade in propriedades.Where(p => p.ClrType == typeof(decimal)))
+            {
+                propriedade.SetValueConverter(new ValueConverter<decimal, decimal>(v => v, v => v + 0.00m));
             }
         }
     }

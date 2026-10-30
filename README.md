@@ -1,5 +1,7 @@
 # pix-api-dotnet
 
+[![CI](https://github.com/RafaelNicolauiOS/pix-api-dotnet/actions/workflows/ci.yml/badge.svg)](https://github.com/RafaelNicolauiOS/pix-api-dotnet/actions/workflows/ci.yml)
+
 Versão em **.NET 8 / ASP.NET Core** do [pix-api](https://github.com/RafaelNicolauiOS/pix-api)
 (Java 17 / Spring Boot), com **o mesmo contrato de API**: mesmas rotas, payloads, status HTTP,
 erros RFC 9457, cabeçalho `X-Admin-Token` e o mesmo arquivo de largura fixa do batch COBOL
@@ -198,6 +200,9 @@ Respostas reais desta versão (capturadas com `curl` contra a API rodando com Po
   `0` e passaria pela validação calado.
 - **`?data=` só em ISO.** Com `DateOnly` direto no parâmetro, o ASP.NET aceitaria também `10/26/2026`
   (cultura invariante = formato americano). A data chega como texto e é lida com `TryParseExact`.
+- **Saldo com 2 casas.** O SQLite devolve decimal como texto (`1000.0`), e o JSON perdia o zero que o
+  `NUMERIC(15,2)` do PostgreSQL e do H2 mantêm (`1000.00`). Achado no job de Docker do CI; um
+  conversor só para SQLite devolve a escala 2.
 - **Mensagens com `R$ 50.01`.** `decimal.ToString()` usa a cultura da máquina, e em pt-BR seria
   `50,01`. O domínio usa `InvariantCulture`.
 
@@ -339,7 +344,7 @@ ficaria atrás de autenticação ou só fora de produção.
 dotnet test
 ```
 
-**89 testes xUnit.** Cada etapa foi escrita **antes** da implementação, e o histórico do git
+**90 testes xUnit.** Cada etapa foi escrita **antes** da implementação, e o histórico do git
 mostra o ciclo: um commit "(vermelho)" com os testes falhando pelo motivo certo
 (`NotImplementedException` ou rota inexistente) e o commit "(verde)" seguinte com a implementação.
 
@@ -351,6 +356,8 @@ f94af2d Define portas da Application e testes dos casos de uso com Moq (vermelho
 726d801 Testes de integração HTTP, razão, mensageria e PostgreSQL (vermelho)            43 falhando
 69b463e Infrastructure (EF Core, Npgsql, SQLite, RabbitMQ) e Api ... (verde)            85/85 (+4 ignorados)
 512f9ca Corrige fila do RabbitMQ 4 e cultura no teste de concorrência ...               89/89
+a43f6e8 Teste: saldo sai com 2 casas no JSON também no SQLite (vermelho)              1 falhando
+(seguinte) Devolve a escala 2 do decimal no SQLite (verde)                             90/90 no CI
 ```
 
 | Pasta / classe | Tipo | Qtd. | O que cobre |
@@ -362,7 +369,7 @@ f94af2d Define portas da Application e testes dos casos de uso com Moq (vermelho
 | `Application/TransferenciaServiceTests` | Moq + fake | 8 | Débito/crédito, partidas dobradas, **ordem salvar → confirmar → publicar**, ordem dos locks, nada publicado em erro, falha no broker não desfaz |
 | `Application/ExportacaoMovimentoServiceTests` | Moq + `FakeTimeProvider` | 3 | "Ontem" em Brasília (não UTC), data futura, `REPEATABLE READ`, totais do trailer |
 | `Application/HistoricoDeEventosTests` | Unidade pura | 2 | Ordem e capacidade |
-| `Api/ContasApiTests` | `WebApplicationFactory` + SQLite | 10 | 201 + `Location`, 400 com `erros`, JSON malformado, 409, 404, PUT, DELETE, contas de exemplo |
+| `Api/ContasApiTests` | `WebApplicationFactory` + SQLite | 11 | 201 + `Location`, 400 com `erros`, JSON malformado, 409, 404, PUT, DELETE, contas de exemplo, saldo com 2 casas no JSON |
 | `Api/TransferenciasApiTests` | idem | 7 | 200 + comprovante (`Z`), 422, 404, origem = destino, 400 para `0.001`, `0`, `-1` |
 | `Api/BatchApiTests` | idem | 6 | Arquivo consistente com o trailer, `Content-Disposition`, data futura/inválida (inclusive `10/26/2026`), padrão = ontem |
 | `Api/LogsApiTests` | idem, 2 fábricas | 5 | 401 sem/errado, 200 com token, limite, 404 sem token configurado |
@@ -413,8 +420,8 @@ docker run --rm -p 8080:8080 -e Pix__Banco__Provedor=sqlite -e ConnectionStrings
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml), a cada push e PR:
 
 - **testes:** sobe `postgres:17` e `rabbitmq:4` como *services*, faz `dotnet restore --locked-mode`
-  (versões exatas dos `packages.lock.json`), build Release, **`dotnet test`** (os 89, inclusive os de
-  PostgreSQL e RabbitMQ), verifica se há migration pendente e publica o `.trx` como artefato.
+  (versões exatas dos `packages.lock.json`), build Release, **`dotnet test`** (os 90, inclusive os de
+  PostgreSQL e RabbitMQ: no CI nenhum fica ignorado), verifica se há migration pendente e publica o `.trx` como artefato.
 - **docker:** builda a imagem, sobe o container, confere que `/contas` responde com as contas de
   exemplo e que o processo **não** roda com UID 0.
 
@@ -541,6 +548,5 @@ Perguntas prováveis e onde está a resposta no código:
 - **Sem autenticação** (igual ao Java) e **sem idempotência no `POST /transferencias`**
   (`Idempotency-Key`).
 - Histórico de eventos e logs em memória: zeram ao reiniciar.
-- Imagem Docker e workflow do CI **ainda não executados**: a máquina onde o projeto foi feito não
-  tem Docker, e o repositório ainda não foi publicado no GitHub. A suíte e o teste de carga rodaram
-  localmente contra PostgreSQL 17 e RabbitMQ 4 reais.
+- Imagem Docker testada só no CI (a máquina onde o projeto foi feito não tem Docker). O teste de
+  carga rodou localmente, contra PostgreSQL 17.
